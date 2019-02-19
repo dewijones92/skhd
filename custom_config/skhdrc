@@ -257,4 +257,4 @@ ctrl + shift + alt - s : chunkc tiling::desktop --layout monocle
 ctrl + shift + alt - d : chunkc tiling::desktop --layout float
 
 ctrl + shift + alt - w : chunkc tiling::desktop --deserialize ~/.chunkwm_layouts/dev_1
-cmd + alt + shift - t : te
+cmd + alt + shift - t : open -n -F /Users/dewijones/Dropbox/Coding/alacritty/target/release/osx/Alacritty.app
