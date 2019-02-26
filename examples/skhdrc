@@ -23,7 +23,8 @@
 #
 #                       proc_map_lst = * <proc_map>
 #
-#                       proc_map     = <string> ':' <command>
+#                       proc_map     = <string> ':' <command> | <string>     '~' |
+#                                      '*'      ':' <command> | '*'          '~'
 #
 #                       string       = '"' 'sequence of characters' '"'
 #
@@ -79,7 +80,9 @@
 #
 # cmd - n [
 #     "kitty"       : echo "hello kitty"
+#     *             : echo "hello everyone"
 #     "qutebrowser" : echo "hello qutebrowser"
+#     "terminal"    ~
 #     "finder"      : false
 # ]
 

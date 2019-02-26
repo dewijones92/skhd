@@ -40,14 +40,14 @@ Requires xcode-8 command-line tools.
       make install      # release version
       make              # debug version
 
-      make fast_profile # release version with profiling information
-      make profile      # debug version with profiling information
-
 ### Usage
 
 ```
 -V | --verbose: Output debug information
     skhd -V
+
+-P | --profile: Output profiling information
+    skhd -P
 
 -v | --version: Print version number to stdout
     skhd -v
@@ -92,7 +92,8 @@ keycode      = 'apple keyboard kVK_<Key> values (0x3C)'
 
 proc_map_lst = * <proc_map>
 
-proc_map     = <string> ':' <command>
+proc_map     = <string> ':' <command> | <string>     '~' |
+               '*'      ':' <command> | '*'          '~'
 
 string       = '"' 'sequence of characters' '"'
 
@@ -108,6 +109,10 @@ command      = command is executed through '$SHELL -c' and
                an EOL character signifies the end of the bind.
 
 ->           = keypress is not consumed by skhd
+
+*            = matches every application not specified in <proc_map_lst>
+
+~            = application is unbound and keypress is forwarded per usual, when specified in a <proc_map>
 ```
 
 A mode is declared according to the following rules:
