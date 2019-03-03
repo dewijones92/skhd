@@ -48,18 +48,36 @@ global struct event_tap event_tap;
 global struct hotloader hotloader;
 global struct mode *current_mode;
 global struct table mode_map;
+global struct table blacklst;
 global char *config_file;
+
+internal HOTLOADER_CALLBACK(config_handler);
 
 internal void
 parse_config_helper(char *absolutepath)
 {
     struct parser parser;
-    if (parser_init(&parser, &mode_map, absolutepath)) {
-        parse_config(&parser);
+    if (parser_init(&parser, &mode_map, &blacklst, absolutepath)) {
+        hotloader_end(&hotloader);
+        hotloader_add_file(&hotloader, absolutepath);
+
+        if (parse_config(&parser)) {
+            parser_do_directives(&parser, &hotloader);
+        }
         parser_destroy(&parser);
+
+        if (hotloader_begin(&hotloader, config_handler)) {
+            debug("skhd: watching files for changes:\n", absolutepath);
+            for (int i = 0; i < hotloader.watch_count; ++i) {
+                debug("\t%s\n", hotloader.watch_list[i].file_info.absolutepath);
+            }
+        } else {
+            warn("skhd: could not start watcher.. hotloading is not enabled\n");
+        }
     } else {
         warn("skhd: could not open file '%s'\n", absolutepath);
     }
+
     current_mode = table_find(&mode_map, "default");
 }
 
@@ -68,7 +86,8 @@ internal HOTLOADER_CALLBACK(config_handler)
     BEGIN_TIMED_BLOCK("hotload_config");
     debug("skhd: config-file has been modified.. reloading config\n");
     free_mode_map(&mode_map);
-    parse_config_helper(absolutepath);
+    free_blacklist(&blacklst);
+    parse_config_helper(config_file);
     END_TIMED_BLOCK();
 }
 
@@ -78,6 +97,7 @@ internal CF_NOTIFICATION_CALLBACK(keymap_handler)
     if (initialize_keycode_map()) {
         debug("skhd: input source changed.. reloading config\n");
         free_mode_map(&mode_map);
+        free_blacklist(&blacklst);
         parse_config_helper(config_file);
     }
     END_TIMED_BLOCK();
@@ -93,6 +113,7 @@ internal EVENT_TAP_CALLBACK(key_handler)
         CGEventTapEnable(event_tap->handle, 1);
     } break;
     case kCGEventKeyDown: {
+        if (table_find(&blacklst, carbon.process_name)) return event;
         if (!current_mode) return event;
 
         BEGIN_TIMED_BLOCK("handle_keypress");
@@ -103,6 +124,7 @@ internal EVENT_TAP_CALLBACK(key_handler)
         if (result) return NULL;
     } break;
     case NX_SYSDEFINED: {
+        if (table_find(&blacklst, carbon.process_name)) return event;
         if (!current_mode) return event;
 
         struct hotkey eventkey;
@@ -236,7 +258,8 @@ int main(int argc, char **argv)
 
     signal(SIGCHLD, SIG_IGN);
     init_shell();
-    table_init(&mode_map, 13, (table_hash_func) hash_mode, (table_compare_func) same_mode);
+    table_init(&mode_map, 13, (table_hash_func) hash_string, (table_compare_func) compare_string);
+    table_init(&blacklst, 13, (table_hash_func) hash_string, (table_compare_func) compare_string);
     END_SCOPED_TIMED_BLOCK();
 
     BEGIN_SCOPED_TIMED_BLOCK("parse_config");
@@ -247,15 +270,6 @@ int main(int argc, char **argv)
     BEGIN_SCOPED_TIMED_BLOCK("begin_eventtap");
     event_tap.mask = (1 << kCGEventKeyDown) | (1 << NX_SYSDEFINED);
     event_tap_begin(&event_tap, key_handler);
-    END_SCOPED_TIMED_BLOCK();
-
-    BEGIN_SCOPED_TIMED_BLOCK("begin_hotloader");
-    if (hotloader_add_file(&hotloader, config_file) &&
-        hotloader_begin(&hotloader, config_handler)) {
-        debug("skhd: watching '%s' for changes\n", config_file);
-    } else {
-        warn("skhd: could not watch '%s'\n", config_file);
-    }
     END_SCOPED_TIMED_BLOCK();
     END_SCOPED_TIMED_BLOCK();
 

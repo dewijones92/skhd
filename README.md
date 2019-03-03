@@ -11,8 +11,9 @@ feature comparison between **skhd** and **khd**
 | hotload config file        | [x]  | [ ] |
 | hotkey passthrough         | [x]  | [x] |
 | modal hotkey-system        | [x]  | [x] |
-| use media-keys as hotkey   | [x]  | [ ] |
 | application specific hotkey| [x]  | [x] |
+| blacklist applications     | [x]  | [ ] |
+| use media-keys as hotkey   | [x]  | [ ] |
 | modifier only hotkey       | [ ]  | [x] |
 | caps-lock as hotkey        | [ ]  | [x] |
 | mouse-buttons as hotkey    | [ ]  | [x] |
@@ -135,4 +136,23 @@ command  = command is executed through '$SHELL -c' and
            prepend '\' at the end of the previous line.
 
            an EOL character signifies the end of the bind.
+```
+
+General options that configure the behaviour of **skhd**:
+```
+# specify a file that should be included as an additional config-file.
+# treated as an absolutepath if the filename begins with '/' otherwise
+# the file is relative to the path of the config-file it was loaded from.
+
+.load "/Users/Koe/.config/partial_skhdrc"
+.load "partial_skhdrc"
+
+# prevents skhd from monitoring events for listed processes.
+
+.blacklist [
+    "terminal"
+    "qutebrowser"
+    "kitty"
+    "google chrome"
+]
 ```
