@@ -43,11 +43,11 @@ extern bool CGSIsSecureEventInputSet(void);
 #define global   static
 
 #define SKHD_CONFIG_FILE ".skhdrc"
-#define SKHD_PID_FILE    "/tmp/skhd.pid"
+#define SKHD_PIDFILE_FMT "/tmp/skhd_%s.pid"
 
 global unsigned major_version = 0;
 global unsigned minor_version = 3;
-global unsigned patch_version = 2;
+global unsigned patch_version = 3;
 
 global struct carbon_event carbon;
 global struct event_tap event_tap;
@@ -114,6 +114,36 @@ internal CF_NOTIFICATION_CALLBACK(keymap_handler)
     END_TIMED_BLOCK();
 }
 
+internal EVENT_TAP_CALLBACK(key_observer_handler)
+{
+    switch (type) {
+    case kCGEventTapDisabledByTimeout:
+    case kCGEventTapDisabledByUserInput: {
+        debug("skhd: restarting event-tap\n");
+        struct event_tap *event_tap = (struct event_tap *) reference;
+        CGEventTapEnable(event_tap->handle, 1);
+    } break;
+    case kCGEventKeyDown:
+    case kCGEventFlagsChanged: {
+        uint32_t flags = CGEventGetFlags(event);
+        uint32_t keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
+
+        if (keycode == kVK_ANSI_C && flags & 0x40000) {
+            exit(0);
+        }
+
+        printf("\rkeycode: 0x%.2X\tflags: ", keycode);
+        for (int i = 31; i >= 0; --i) {
+            printf("%c", (flags & (1 << i)) ? '1' : '0');
+        }
+        fflush(stdout);
+
+        return NULL;
+    } break;
+    }
+    return event;
+}
+
 internal EVENT_TAP_CALLBACK(key_handler)
 {
     switch (type) {
@@ -162,9 +192,17 @@ sigusr1_handler(int signal)
 internal pid_t
 read_pid_file(void)
 {
+    char pid_file[255] = {};
     pid_t pid = 0;
 
-    int handle = open(SKHD_PID_FILE, O_RDWR);
+    char *user = getenv("USER");
+    if (user) {
+        snprintf(pid_file, sizeof(pid_file), SKHD_PIDFILE_FMT, user);
+    } else {
+        error("skhd: could not create path to pid-file because 'env USER' was not set! abort..\n");
+    }
+
+    int handle = open(pid_file, O_RDWR);
     if (handle == -1) {
         error("skhd: could not open pid-file..\n");
     }
@@ -182,9 +220,17 @@ read_pid_file(void)
 internal void
 create_pid_file(void)
 {
+    char pid_file[255] = {};
     pid_t pid = getpid();
 
-    int handle = open(SKHD_PID_FILE, O_CREAT | O_WRONLY, 0644);
+    char *user = getenv("USER");
+    if (user) {
+        snprintf(pid_file, sizeof(pid_file), SKHD_PIDFILE_FMT, user);
+    } else {
+        error("skhd: could not create path to pid-file because 'env USER' was not set! abort..\n");
+    }
+
+    int handle = open(pid_file, O_CREAT | O_WRONLY, 0644);
     if (handle == -1) {
         error("skhd: could not create pid-file! abort..\n");
     }
@@ -205,7 +251,7 @@ internal bool
 parse_arguments(int argc, char **argv)
 {
     int option;
-    const char *short_option = "VPvc:k:t:rh";
+    const char *short_option = "VPvc:k:t:rho";
     struct option long_option[] = {
         { "verbose", no_argument, NULL, 'V' },
         { "profile", no_argument, NULL, 'P' },
@@ -215,6 +261,7 @@ parse_arguments(int argc, char **argv)
         { "key", required_argument, NULL, 'k' },
         { "text", required_argument, NULL, 't' },
         { "reload", no_argument, NULL, 'r' },
+        { "observe", no_argument, NULL, 'o' },
         { NULL, 0, NULL, 0 }
     };
 
@@ -248,6 +295,12 @@ parse_arguments(int argc, char **argv)
             pid_t pid = read_pid_file();
             if (pid) kill(pid, SIGUSR1);
             return true;
+        } break;
+        case 'o': {
+            event_tap.mask = (1 << kCGEventKeyDown) |
+                             (1 << kCGEventFlagsChanged);
+            event_tap_begin(&event_tap, key_observer_handler);
+            CFRunLoopRun();
         } break;
         }
     }
